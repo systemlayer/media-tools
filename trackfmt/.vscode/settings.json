@@ -1,0 +1,12 @@
+{
+  "editor.tabSize": 2,
+  "python.experiments.enabled": false,
+  "autopep8.args": [
+    "--indent-size=2"
+  ],
+  "cSpell.words": [
+    "dedup",
+    "FLAC",
+    "metaflac"
+  ]
+}
