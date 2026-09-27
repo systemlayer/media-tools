@@ -277,7 +277,11 @@ def _print_flac_progress(
     total_count: int,
     elapsed_seconds: int,
 ) -> None:
-  progress = f"File {completed_count}/{total_count}. Elapsed time {elapsed_seconds}s"
+  completed_width = len(str(total_count))
+  progress = (
+      f"File {completed_count:0{completed_width}d}/{total_count} | "
+      f"Elapsed time {elapsed_seconds}s"
+  )
   print(colored(progress, "dark_grey"), file=sys.stderr)
 
 

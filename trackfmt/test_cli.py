@@ -211,9 +211,9 @@ class FlacTests(unittest.TestCase):
     )
     self.assertEqual(
         errors.getvalue(),
-        "File 0/2. Elapsed time 0s\n"
-        "File 1/2. Elapsed time 30s\n"
-        "File 2/2. Elapsed time 30s\n",
+        "File 0/2 | Elapsed time 0s\n"
+        "File 1/2 | Elapsed time 30s\n"
+        "File 2/2 | Elapsed time 30s\n",
     )
 
   @patch("cli.time.monotonic", side_effect=[10.0, 10.0])
@@ -238,8 +238,21 @@ class FlacTests(unittest.TestCase):
     mock_wait.assert_not_called()
     self.assertEqual(
         errors.getvalue(),
-        "File 0/0. Elapsed time 0s\n"
-        "File 0/0. Elapsed time 0s\n",
+        "File 0/0 | Elapsed time 0s\n"
+        "File 0/0 | Elapsed time 0s\n",
+    )
+
+  @patch("cli.colored", side_effect=lambda text, _color: text)
+  def test_flac_progress_pads_completed_count(
+      self,
+      _mock_colored: MagicMock,
+  ) -> None:
+    errors = StringIO()
+    with redirect_stderr(errors):
+      cli._print_flac_progress(871, 3284, 390)
+    self.assertEqual(
+        errors.getvalue(),
+        "File 0871/3284 | Elapsed time 390s\n",
     )
 
   def test_flac_score_breakdown_formats_missing_or_zero_rules(self) -> None:
@@ -302,9 +315,9 @@ class FlacTests(unittest.TestCase):
     self.assertEqual(
         mock_colored.call_args_list,
         [
-            call("File 0/2. Elapsed time 0s", "dark_grey"),
-            call("File 1/2. Elapsed time 30s", "dark_grey"),
-            call("File 2/2. Elapsed time 30s", "dark_grey"),
+            call("File 0/2 | Elapsed time 0s", "dark_grey"),
+            call("File 1/2 | Elapsed time 30s", "dark_grey"),
+            call("File 2/2 | Elapsed time 30s", "dark_grey"),
         ],
     )
 
@@ -331,7 +344,7 @@ class FlacTests(unittest.TestCase):
             sample_duration=None,
         ))
     executor.terminate_workers.assert_called_once_with()
-    self.assertEqual(errors.getvalue(), "File 0/1. Elapsed time 0s\n")
+    self.assertEqual(errors.getvalue(), "File 0/1 | Elapsed time 0s\n")
 
 
 if __name__ == "__main__":
