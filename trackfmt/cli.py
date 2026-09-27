@@ -6,8 +6,17 @@ import subprocess
 import sys
 import time
 from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, wait
+from enum import StrEnum
 from pathlib import Path, PosixPath
 from media import read_flac_tags, read_mp3_grouping
+
+# FLAC Detective verdicts: https://guillain-rdcde.github.io/FLAC_Detective/api-reference.html
+class FlacVerdict(StrEnum):
+  AUTHENTIC = "AUTHENTIC"
+  WARNING = "WARNING"
+  SUSPICIOUS = "SUSPICIOUS"
+  FAKE_CERTAIN = "FAKE_CERTAIN"
+
 
 # Seconds between FLAC analysis progress updates.
 _FLAC_PROGRESS_INTERVAL_SECONDS: int = 20
@@ -276,7 +285,7 @@ def handle_flac(args: argparse.Namespace) -> None:
           file_path = futures[future]
           result = future.result()
           completed_count += 1
-          if result.get("verdict") == "AUTHENTIC":
+          if result.get("verdict") == FlacVerdict.AUTHENTIC:
             continue
           print(file_path)
           print(result["confidence"])
