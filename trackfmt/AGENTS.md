@@ -25,6 +25,6 @@
 
 ## Documentation and comments
 
-- Explain every top-level declaration with a concise comment; a docstring satisfies this requirement for classes and functions.
-- Add docstrings to public modules, classes, functions, and methods. Document non-public code only when its purpose, contract, or behavior is not apparent.
-- Keep docstrings concise. Include parameters, return values, exceptions, and side effects only when they are not obvious.
+- Give every top-level declaration a concise explanatory comment, even if it has a docstring.
+- Add concise docstrings to public declarations, but never to test or stub files.
+- Document non-public code, parameters, return values, exceptions, and side effects only when they are not obvious.
