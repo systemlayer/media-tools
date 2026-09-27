@@ -136,7 +136,7 @@ class FlacTests(unittest.TestCase):
       suspicious_future.result.return_value = {
           "verdict": "SUSPICIOUS",
           "score": 75,
-          "confidence": "Anomalies detected may be legitimate",
+          "confidence": "  ⚠️  Anomalies detected may be legitimate 🔍  ",
           "reason": "Constant MP3 bitrate detected",
           "score_breakdown": {
               "rule_1": 50,
@@ -168,10 +168,9 @@ class FlacTests(unittest.TestCase):
     self.assertEqual(
         rendered,
         f"Scanning directory: {directory}\n"
-        f"{suspicious}\n"
+        f"[SUSPICIOUS] {suspicious}\n"
         "Anomalies detected may be legitimate\n"
-        "Score=75 Verdict=SUSPICIOUS\n"
-        "Score breakdown: rule_1=50, rule_3=-5\n"
+        "Score: 75 Breakdown: rule_1=50, rule_3=-5\n"
         "Reason: Constant MP3 bitrate detected\n",
     )
 
