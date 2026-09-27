@@ -27,6 +27,19 @@ python3 -m pip install -r requirements.txt
 python3 -m pip install --only-binary=:all: audiomatch==0.1.8
 ```
 
+Run all automatic tests from the repository root:
+
+```sh
+python3 -m unittest discover -v
+```
+
+Run an individual test module:
+
+```sh
+python3 -m unittest -v test_cli
+python3 -m unittest -v test_media
+```
+
 ## Usage
 
 ```sh
