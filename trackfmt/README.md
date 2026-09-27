@@ -49,8 +49,9 @@ Run `python3 cli.py COMMAND --help` for command-specific options.
 
 ### FLAC verdicts
 
-The `flac` command reports non-authentic results with one of these verdicts:
+The `flac` command reports non-authentic results using the first character of
+the verdict:
 
-- `WARNING`: The result is uncertain; check the file manually.
-- `SUSPICIOUS`: The evidence is stronger than a warning, but is not conclusive.
-- `FAKE_CERTAIN`: The file is definitively a fake FLAC sourced from lossy audio.
+- `W` (`WARNING`): The result is uncertain; check the file manually.
+- `S` (`SUSPICIOUS`): The evidence is stronger than a warning, but is not conclusive.
+- `F` (`FAKE_CERTAIN`): The file is definitively a fake FLAC sourced from lossy audio.

@@ -136,7 +136,6 @@ class FlacTests(unittest.TestCase):
       suspicious_future.result.return_value = {
           "verdict": "SUSPICIOUS",
           "score": 75,
-          "confidence": "  ⚠️  Anomalies detected may be legitimate 🔍  ",
           "reason": "Constant MP3 bitrate detected",
           "score_breakdown": {
               "rule_1": 50,
@@ -168,8 +167,7 @@ class FlacTests(unittest.TestCase):
     self.assertEqual(
         rendered,
         f"Scanning directory: {directory}\n"
-        f"[SUSPICIOUS] {suspicious}\n"
-        "Anomalies detected may be legitimate\n"
+        f"[S] {suspicious}\n"
         "Score: 75 | Breakdown: rule_1=50, rule_3=-5\n"
         "Reason: Constant MP3 bitrate detected\n",
     )
@@ -262,9 +260,9 @@ class FlacTests(unittest.TestCase):
     self.assertEqual(
         mock_colored.call_args_list,
         [
-            call("[WARNING] track.flac", "yellow"),
-            call("[SUSPICIOUS] track.flac", "red"),
-            call("[FAKE_CERTAIN] track.flac", "red"),
+            call("[W] track.flac", "yellow"),
+            call("[S] track.flac", "red"),
+            call("[F] track.flac", "red"),
         ],
     )
 

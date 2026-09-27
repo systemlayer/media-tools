@@ -2,7 +2,6 @@
 
 import argparse
 import os
-import re
 import subprocess
 import sys
 import time
@@ -29,13 +28,6 @@ _FLAC_VERDICT_COLORS: dict[str, str] = {
     FlacVerdict.SUSPICIOUS: "red",
     FlacVerdict.FAKE_CERTAIN: "red",
 }
-
-# Unicode ranges used for emoji characters and their sequence markers.
-_EMOJI_PATTERN = re.compile(
-    "[\u200d\u20e3\u2600-\u27bf\u2b00-\u2bff\ufe0e\ufe0f"
-    "\U0001f1e6-\U0001f1ff\U0001f300-\U0001faff]"
-)
-
 
 def existing_dir(path_str: str) -> Path:
   path = Path(path_str)
@@ -273,14 +265,10 @@ def _format_score_breakdown(result: dict[str, object]) -> str:
 
 # Format the result heading with the color assigned to its verdict.
 def _format_flac_heading(verdict: object, file_path: Path) -> str:
-  heading = f"[{verdict}] {file_path}"
-  color = _FLAC_VERDICT_COLORS.get(str(verdict))
+  verdict_text = str(verdict)
+  heading = f"[{verdict_text[:1]}] {file_path}"
+  color = _FLAC_VERDICT_COLORS.get(verdict_text)
   return colored(heading, color) if color is not None else heading
-
-
-# Remove emoji characters and surrounding whitespace from display text.
-def _remove_emojis(value: object) -> str:
-  return _EMOJI_PATTERN.sub("", str(value)).strip()
 
 
 # Print a dark-grey FLAC analysis progress update to standard error.
@@ -326,7 +314,6 @@ def handle_flac(args: argparse.Namespace) -> None:
           if result.get("verdict") == FlacVerdict.AUTHENTIC:
             continue
           print(_format_flac_heading(result["verdict"], file_path))
-          print(_remove_emojis(result["confidence"]))
           print(
               f"Score: {result['score']} | "
               f"Breakdown: {_format_score_breakdown(result)}"
