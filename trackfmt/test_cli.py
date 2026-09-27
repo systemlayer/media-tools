@@ -1,3 +1,5 @@
+import subprocess
+import sys
 import unittest
 from argparse import Namespace
 from contextlib import redirect_stdout
@@ -56,6 +58,18 @@ class GainTests(unittest.TestCase):
 
 
 class FlacTests(unittest.TestCase):
+  def test_importing_cli_does_not_load_flac_detective(self) -> None:
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "import sys; import cli; raise SystemExit('flac_detective' in sys.modules)",
+        ],
+        cwd=Path(__file__).parent,
+        check=False,
+    )
+    self.assertEqual(result.returncode, 0)
+
   def test_flac_options_have_expected_defaults(self) -> None:
     args = cli.build_parser().parse_args(["flac", "/music"])
     self.assertEqual(args.jobs, cli.os.cpu_count() or 1)
@@ -77,13 +91,13 @@ class FlacTests(unittest.TestCase):
     with self.assertRaises(SystemExit):
       cli.build_parser().parse_args(["flac", "--jobs", "0", "/music"])
 
-  @patch("cli.FLACAnalyzer")
+  @patch("flac_detective.FLACAnalyzer")
   def test_analyzer_uses_default_sample_duration(self, mock_analyzer: MagicMock) -> None:
     cli._analyze_flac(Path("track.flac"), None)
     mock_analyzer.assert_called_once_with()
     mock_analyzer.return_value.analyze_file.assert_called_once_with(Path("track.flac"))
 
-  @patch("cli.FLACAnalyzer")
+  @patch("flac_detective.FLACAnalyzer")
   def test_analyzer_accepts_sample_duration(self, mock_analyzer: MagicMock) -> None:
     cli._analyze_flac(Path("track.flac"), 20.0)
     mock_analyzer.assert_called_once_with(sample_duration=20.0)

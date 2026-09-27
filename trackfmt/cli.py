@@ -7,7 +7,6 @@ import sys
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path, PosixPath
 from pprint import pformat
-from flac_detective import FLACAnalyzer
 from media import read_flac_tags, read_mp3_grouping
 
 
@@ -218,6 +217,11 @@ def handle_dedup(args: argparse.Namespace) -> None:
 
 def _analyze_flac(file_path: Path, sample_duration: float | None) -> dict[str, object]:
   """Analyze one FLAC file without overriding the analyzer's default duration."""
+  # Import this dependency only for FLAC analysis to reduce the attack surface in case
+  # of a supply-chain attack: unrelated commands avoid its import-time code. This does
+  # not protect against install-time behavior, compromised transitive dependencies, or
+  # execution when FLAC analysis itself is invoked.
+  from flac_detective import FLACAnalyzer
   # FLACAnalyzer's automatic repair fallback cannot be disabled through its public API.
   # Wrapping it with another temporary copy would be inefficient because the analyzer
   # already copies each file. Mount the media directory read-only to prevent repairs.
