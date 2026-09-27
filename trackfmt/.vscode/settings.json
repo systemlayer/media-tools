@@ -1,0 +1,14 @@
+{
+  "editor.tabSize": 2,
+  "python.experiments.enabled": false,
+  "autopep8.args": [
+    "--indent-size=2",
+    "--max-line-length=100"
+  ],
+  "cSpell.words": [
+    "dedup",
+    "ffprobe",
+    "FLAC",
+    "metaflac"
+  ]
+}

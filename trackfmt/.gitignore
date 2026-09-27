@@ -1,0 +1,22 @@
+# Temporary files
+*.tmp
+*.temp
+*.swp
+.cache/
+
+# Archives
+*.tgz
+*.tar
+*.tar.gz
+
+# Python
+__pycache__/
+*.egg-info/
+.eggs/
+.venv/
+venv/
+
+# Other files
+test_data/
+*.ignore.md
+*.ignore.txt

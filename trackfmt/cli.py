@@ -4,7 +4,9 @@ import argparse
 import os
 import subprocess
 import sys
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path, PosixPath
+from pprint import pformat
 from media import read_flac_tags, read_mp3_grouping
 
 
@@ -13,6 +15,13 @@ def existing_dir(path_str: str) -> Path:
   if not path.is_dir():
     raise argparse.ArgumentTypeError(f"not a directory: {path}")
   return path
+
+
+def _parse_positive_int(value: str) -> int:
+  parsed = int(value)
+  if parsed < 1:
+    raise argparse.ArgumentTypeError("must be 1 or more")
+  return parsed
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -28,6 +37,7 @@ def build_parser() -> argparse.ArgumentParser:
       "grouping": "Set the grouping tag on audio files.",
       "gain": "Add ReplayGain metadata to audio files.",
       "dedup": "Scan for duplicate audio files.",
+      "flac": "Detect FLAC files transcoded from lossy sources.",
   }
 
   for name, help_text in commands.items():
@@ -56,6 +66,19 @@ def build_parser() -> argparse.ArgumentParser:
           type=int,
           default=120,
           help="Number of seconds to analyze (default: 120).",
+      )
+    if name == "flac":
+      subparser.add_argument(
+          "--jobs",
+          type=_parse_positive_int,
+          default=os.cpu_count() or 1,
+          help="Number of concurrent analysis jobs (default: number of CPUs).",
+      )
+      subparser.add_argument(
+          "--sample-duration",
+          type=float,
+          default=None,
+          help="Seconds of audio to sample per window (default: analyzer default).",
       )
 
   return parser
@@ -192,6 +215,45 @@ def handle_dedup(args: argparse.Namespace) -> None:
   )
 
 
+def _analyze_flac(file_path: Path, sample_duration: float | None) -> dict[str, object]:
+  """Analyze one FLAC file without overriding the analyzer's default duration."""
+  # Import this dependency only for FLAC analysis to reduce the attack surface in case
+  # of a supply-chain attack: unrelated commands avoid its import-time code. This does
+  # not protect against install-time behavior, compromised transitive dependencies, or
+  # execution when FLAC analysis itself is invoked.
+  from flac_detective import FLACAnalyzer
+  # FLACAnalyzer's automatic repair fallback cannot be disabled through its public API.
+  # Wrapping it with another temporary copy would be inefficient because the analyzer
+  # already copies each file. Mount the media directory read-only to prevent repairs.
+  if sample_duration is None:
+    analyzer = FLACAnalyzer()
+  else:
+    analyzer = FLACAnalyzer(sample_duration=sample_duration)
+  return analyzer.analyze_file(file_path)
+
+
+def handle_flac(args: argparse.Namespace) -> None:
+  print(f"Scanning directory: {args.directory}")
+  flac_files = sorted(
+      file_path
+      for file_path in args.directory.rglob("*")
+      if file_path.is_file() and file_path.suffix.lower() == ".flac"
+  )
+  with ProcessPoolExecutor(max_workers=args.jobs) as executor:
+    futures = {
+        executor.submit(_analyze_flac, file_path, args.sample_duration): file_path
+        for file_path in flac_files
+    }
+    for future in as_completed(futures):
+      file_path = futures[future]
+      result = future.result()
+      if result.get("verdict") == "AUTHENTIC":
+        continue
+      print(file_path)
+      print(pformat(result, sort_dicts=False, width=1))
+      print()
+
+
 def main() -> None:
   parser = build_parser()
   args = parser.parse_args()
@@ -200,6 +262,7 @@ def main() -> None:
       "grouping": handle_grouping,
       "gain": handle_gain,
       "dedup": handle_dedup,
+      "flac": handle_flac,
   }
   if not args.non_interactive:
     _press_return_to_continue()

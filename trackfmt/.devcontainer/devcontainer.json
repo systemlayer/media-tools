@@ -1,0 +1,47 @@
+// For format details, see https://aka.ms/devcontainer.json. For config options, see the
+// README at: https://github.com/devcontainers/templates/tree/main/src/python
+{
+	"name": "trackfmt",
+	"dockerFile": "Dockerfile",
+	"build": {
+		"args": {
+			"CODEX_URL": "https://raw.githubusercontent.com/openai/codex/refs/tags/rust-v0.146.0/scripts/install/install.sh",
+			"CODEX_SHA256": "ba92dd27e5c06f0d3bbc58bfa4b9cfb6599cd2742fbb1f92a2765e6c07dedb5a",
+			// Variant syntax is CONTAINER_VERSION-PYTHON_VERSION-BASE_OS.
+			// To update container see https://github.com/devcontainers/images/tree/main/src/python.
+			"VARIANT": "3-3.14-trixie"
+		}
+	},
+	"mounts": [
+		{
+			"source": "devcontainer-codex",
+			"target": "/opt/codex",
+			"type": "volume"
+		}
+	],
+	// Features to add to the dev container. More info: https://containers.dev/features.
+	// "features": {},
+	// Use 'forwardPorts' to make a list of ports inside the container available locally.
+	// "forwardPorts": [],
+	// Use 'postCreateCommand' to run commands after the container is created.
+	"postCreateCommand": "set -e; if [ ! -x \"$HOME/.local/bin/codex\" ]; then CODEX_NON_INTERACTIVE=true /usr/local/share/codex/install.sh; fi; if [ ! -f \"$CODEX_HOME/config.toml\" ]; then cp /usr/local/share/codex/config.toml \"$CODEX_HOME/config.toml\"; fi",
+	// Configure tool-specific properties.
+	"customizations": {
+		"vscode": {
+			"extensions": [
+				"streetsidesoftware.code-spell-checker",
+				"ms-python.python"
+			]
+		}
+	},
+	// Uncomment to connect as root instead. More info: https://aka.ms/dev-containers-non-root.
+	// "remoteUser": "root"
+	"runArgs": [
+		"--cap-drop=DAC_OVERRIDE",
+		"--cap-drop=FOWNER",
+		"--cap-drop=MKNOD",
+		"--cap-drop=SYS_CHROOT",
+		"--cap-drop=NET_RAW",
+		"--cap-drop=NET_BIND_SERVICE"
+	]
+}
