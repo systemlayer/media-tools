@@ -223,6 +223,61 @@ class FlacTests(unittest.TestCase):
         "(none)",
     )
 
+  @patch("cli.colored", side_effect=lambda text, _color: text)
+  def test_flac_result_headings_use_verdict_colors(
+      self,
+      mock_colored: MagicMock,
+  ) -> None:
+    file_path = Path("track.flac")
+    for verdict in ("WARNING", "SUSPICIOUS", "FAKE_CERTAIN"):
+      cli._format_flac_heading(verdict, file_path)
+    self.assertEqual(
+        mock_colored.call_args_list,
+        [
+            call("[WARNING] track.flac", "yellow"),
+            call("[SUSPICIOUS] track.flac", "red"),
+            call("[FAKE_CERTAIN] track.flac", "red"),
+        ],
+    )
+
+  @patch("cli.colored", side_effect=lambda text, _color: text)
+  @patch("cli.time.monotonic", side_effect=[0.0, 0.0, 20.0, 20.0, 20.0])
+  @patch("cli.wait")
+  @patch("cli.ProcessPoolExecutor")
+  def test_flac_progress_uses_dark_grey(
+      self,
+      mock_executor: MagicMock,
+      mock_wait: MagicMock,
+      _mock_monotonic: MagicMock,
+      mock_colored: MagicMock,
+  ) -> None:
+    with TemporaryDirectory() as temp_dir:
+      directory = Path(temp_dir)
+      first = directory / "first.flac"
+      second = directory / "second.flac"
+      first.touch()
+      second.touch()
+      first_future = MagicMock()
+      second_future = MagicMock()
+      first_future.result.return_value = {"verdict": "AUTHENTIC"}
+      second_future.result.return_value = {"verdict": "AUTHENTIC"}
+      executor = mock_executor.return_value.__enter__.return_value
+      executor.submit.side_effect = [first_future, second_future]
+      mock_wait.side_effect = [
+          ({first_future}, {second_future}),
+          ({second_future}, set()),
+      ]
+      with redirect_stdout(StringIO()), redirect_stderr(StringIO()):
+        cli.handle_flac(Namespace(
+            directory=directory,
+            jobs=2,
+            sample_duration=None,
+        ))
+    mock_colored.assert_called_once_with(
+        "File 1/2. Elapsed time 20s",
+        "dark_grey",
+    )
+
   @patch("cli.wait", side_effect=KeyboardInterrupt)
   @patch("cli.ProcessPoolExecutor")
   def test_flac_terminates_workers_when_interrupted(

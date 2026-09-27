@@ -10,6 +10,7 @@ from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, wait
 from enum import StrEnum
 from pathlib import Path, PosixPath
 from media import read_flac_tags, read_mp3_grouping
+from termcolor import colored
 
 # FLAC Detective verdicts: https://guillain-rdcde.github.io/FLAC_Detective/api-reference.html
 class FlacVerdict(StrEnum):
@@ -21,6 +22,13 @@ class FlacVerdict(StrEnum):
 
 # Seconds between FLAC analysis progress updates.
 _FLAC_PROGRESS_INTERVAL_SECONDS: int = 20
+
+# Colors used for FLAC analysis verdict headings.
+_FLAC_VERDICT_COLORS: dict[str, str] = {
+    FlacVerdict.WARNING: "yellow",
+    FlacVerdict.SUSPICIOUS: "red",
+    FlacVerdict.FAKE_CERTAIN: "red",
+}
 
 # Unicode ranges used for emoji characters and their sequence markers.
 _EMOJI_PATTERN = re.compile(
@@ -263,6 +271,13 @@ def _format_score_breakdown(result: dict[str, object]) -> str:
   return ", ".join(entries) or "(none)"
 
 
+# Format the result heading with the color assigned to its verdict.
+def _format_flac_heading(verdict: object, file_path: Path) -> str:
+  heading = f"[{verdict}] {file_path}"
+  color = _FLAC_VERDICT_COLORS.get(str(verdict))
+  return colored(heading, color) if color is not None else heading
+
+
 # Remove emoji characters and surrounding whitespace from display text.
 def _remove_emojis(value: object) -> str:
   return _EMOJI_PATTERN.sub("", str(value)).strip()
@@ -299,7 +314,7 @@ def handle_flac(args: argparse.Namespace) -> None:
           completed_count += 1
           if result.get("verdict") == FlacVerdict.AUTHENTIC:
             continue
-          print(f"[{result['verdict']}] {file_path}")
+          print(_format_flac_heading(result["verdict"], file_path))
           print(_remove_emojis(result["confidence"]))
           print(
               f"Score: {result['score']} "
@@ -310,10 +325,8 @@ def handle_flac(args: argparse.Namespace) -> None:
         now = time.monotonic()
         if pending and now >= next_progress_at:
           elapsed_seconds = int(now - started_at)
-          print(
-              f"File {completed_count}/{len(flac_files)}. Elapsed time {elapsed_seconds}s",
-              file=sys.stderr,
-          )
+          progress = f"File {completed_count}/{len(flac_files)}. Elapsed time {elapsed_seconds}s"
+          print(colored(progress, "dark_grey"), file=sys.stderr)
           next_progress_at = now + _FLAC_PROGRESS_INTERVAL_SECONDS
     except KeyboardInterrupt:
       executor.terminate_workers()

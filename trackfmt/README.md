@@ -6,23 +6,24 @@ detect FLAC files transcoded from lossy sources.
 
 ## Required tools
 
-The tools needed for the commands you use must be available on `PATH`:
+The following external CLI tools must be available on `PATH` for the commands
+that use them:
 
 - `metaflac`: Reads and updates grouping tags in FLAC files for `grouping`.
 - `eyeD3`: Reads and updates grouping tags in MP3 files for `grouping`.
 - `rsgain`: Calculates and writes ReplayGain metadata for `gain`.
 - `audiomatch`: Compares audio files to find duplicates for `dedup`.
-- `flac-detective`: Detects FLAC files transcoded from lossy sources for `flac`.
 
 ## Development
 
-All required tools except `audiomatch` can be installed through the `apt` or
-`apk` package manager, depending on your Linux distribution.
+All required external CLI tools except `audiomatch` can be installed through
+the `apt` or `apk` package manager, depending on your Linux distribution.
 
 Install the Python dependencies with `pip`.
 
 ```sh
 python3 -m pip install --only-binary=:all: audiomatch==0.1.8 flac-detective==1.18.0
+python3 -m pip install termcolor==3.3.0
 ```
 
 Run all automatic tests from the repository root:
