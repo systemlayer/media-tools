@@ -46,3 +46,11 @@ python3 cli.py [--non-interactive] {grouping,gain,dedup,flac} DIRECTORY
 ```
 
 Run `python3 cli.py COMMAND --help` for command-specific options.
+
+### FLAC verdicts
+
+The `flac` command reports non-authentic results with one of these verdicts:
+
+- `WARNING`: The result is uncertain; check the file manually.
+- `SUSPICIOUS`: The evidence is stronger than a warning, but is not conclusive.
+- `FAKE_CERTAIN`: The file is definitively a fake FLAC sourced from lossy audio.

@@ -148,7 +148,7 @@ class FlacTests(unittest.TestCase):
       executor = mock_executor.return_value.__enter__.return_value
       executor.submit.side_effect = [authentic_future, suspicious_future]
       output = StringIO()
-      with redirect_stdout(output):
+      with redirect_stdout(output), redirect_stderr(StringIO()):
         cli.handle_flac(Namespace(
             directory=directory,
             jobs=2,
@@ -170,11 +170,11 @@ class FlacTests(unittest.TestCase):
         f"Scanning directory: {directory}\n"
         f"[SUSPICIOUS] {suspicious}\n"
         "Anomalies detected may be legitimate\n"
-        "Score: 75 Breakdown: rule_1=50, rule_3=-5\n"
+        "Score: 75 | Breakdown: rule_1=50, rule_3=-5\n"
         "Reason: Constant MP3 bitrate detected\n",
     )
 
-  @patch("cli.time.monotonic", side_effect=[0.0, 0.0, 30.0, 30.0, 30.0])
+  @patch("cli.time.monotonic", side_effect=[0.0, 0.0, 30.0, 30.0, 30.0, 30.0])
   @patch("cli.wait")
   @patch("cli.ProcessPoolExecutor")
   def test_flac_prints_progress_every_thirty_seconds(
@@ -213,7 +213,35 @@ class FlacTests(unittest.TestCase):
     )
     self.assertEqual(
         errors.getvalue(),
-        "File 1/2. Elapsed time 30s\n",
+        "File 0/2. Elapsed time 0s\n"
+        "File 1/2. Elapsed time 30s\n"
+        "File 2/2. Elapsed time 30s\n",
+    )
+
+  @patch("cli.time.monotonic", side_effect=[10.0, 10.0])
+  @patch("cli.wait")
+  @patch("cli.ProcessPoolExecutor")
+  def test_flac_prints_initial_and_final_progress_for_empty_directory(
+      self,
+      mock_executor: MagicMock,
+      mock_wait: MagicMock,
+      _mock_monotonic: MagicMock,
+  ) -> None:
+    with TemporaryDirectory() as temp_dir:
+      errors = StringIO()
+      with redirect_stdout(StringIO()), redirect_stderr(errors):
+        cli.handle_flac(Namespace(
+            directory=Path(temp_dir),
+            jobs=2,
+            sample_duration=None,
+        ))
+    executor = mock_executor.return_value.__enter__.return_value
+    executor.submit.assert_not_called()
+    mock_wait.assert_not_called()
+    self.assertEqual(
+        errors.getvalue(),
+        "File 0/0. Elapsed time 0s\n"
+        "File 0/0. Elapsed time 0s\n",
     )
 
   def test_flac_score_breakdown_formats_missing_or_zero_rules(self) -> None:
@@ -241,7 +269,7 @@ class FlacTests(unittest.TestCase):
     )
 
   @patch("cli.colored", side_effect=lambda text, _color: text)
-  @patch("cli.time.monotonic", side_effect=[0.0, 0.0, 30.0, 30.0, 30.0])
+  @patch("cli.time.monotonic", side_effect=[0.0, 0.0, 30.0, 30.0, 30.0, 30.0])
   @patch("cli.wait")
   @patch("cli.ProcessPoolExecutor")
   def test_flac_progress_uses_dark_grey(
@@ -273,9 +301,13 @@ class FlacTests(unittest.TestCase):
             jobs=2,
             sample_duration=None,
         ))
-    mock_colored.assert_called_once_with(
-        "File 1/2. Elapsed time 30s",
-        "dark_grey",
+    self.assertEqual(
+        mock_colored.call_args_list,
+        [
+            call("File 0/2. Elapsed time 0s", "dark_grey"),
+            call("File 1/2. Elapsed time 30s", "dark_grey"),
+            call("File 2/2. Elapsed time 30s", "dark_grey"),
+        ],
     )
 
   @patch("cli.wait", side_effect=KeyboardInterrupt)
@@ -289,13 +321,19 @@ class FlacTests(unittest.TestCase):
       directory = Path(temp_dir)
       (directory / "track.flac").touch()
       executor = mock_executor.return_value.__enter__.return_value
-      with self.assertRaises(KeyboardInterrupt), redirect_stdout(StringIO()):
+      errors = StringIO()
+      with (
+          self.assertRaises(KeyboardInterrupt),
+          redirect_stdout(StringIO()),
+          redirect_stderr(errors),
+      ):
         cli.handle_flac(Namespace(
             directory=directory,
             jobs=1,
             sample_duration=None,
         ))
     executor.terminate_workers.assert_called_once_with()
+    self.assertEqual(errors.getvalue(), "File 0/1. Elapsed time 0s\n")
 
 
 if __name__ == "__main__":

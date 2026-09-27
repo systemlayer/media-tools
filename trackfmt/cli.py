@@ -283,6 +283,16 @@ def _remove_emojis(value: object) -> str:
   return _EMOJI_PATTERN.sub("", str(value)).strip()
 
 
+# Print a dark-grey FLAC analysis progress update to standard error.
+def _print_flac_progress(
+    completed_count: int,
+    total_count: int,
+    elapsed_seconds: int,
+) -> None:
+  progress = f"File {completed_count}/{total_count}. Elapsed time {elapsed_seconds}s"
+  print(colored(progress, "dark_grey"), file=sys.stderr)
+
+
 def handle_flac(args: argparse.Namespace) -> None:
   # Discover the complete workload before analysis so progress has a stable total.
   print(f"Scanning directory: {args.directory}")
@@ -295,6 +305,7 @@ def handle_flac(args: argparse.Namespace) -> None:
   started_at = time.monotonic()
   next_progress_at = started_at + _FLAC_PROGRESS_INTERVAL_SECONDS
   completed_count = 0
+  _print_flac_progress(completed_count, len(flac_files), 0)
   with ProcessPoolExecutor(max_workers=args.jobs) as executor:
     try:
       # Submit every file once and retain its path for rendering suspicious results.
@@ -317,7 +328,7 @@ def handle_flac(args: argparse.Namespace) -> None:
           print(_format_flac_heading(result["verdict"], file_path))
           print(_remove_emojis(result["confidence"]))
           print(
-              f"Score: {result['score']} "
+              f"Score: {result['score']} | "
               f"Breakdown: {_format_score_breakdown(result)}"
           )
           print(f"Reason: {result['reason']}")
@@ -325,12 +336,13 @@ def handle_flac(args: argparse.Namespace) -> None:
         now = time.monotonic()
         if pending and now >= next_progress_at:
           elapsed_seconds = int(now - started_at)
-          progress = f"File {completed_count}/{len(flac_files)}. Elapsed time {elapsed_seconds}s"
-          print(colored(progress, "dark_grey"), file=sys.stderr)
+          _print_flac_progress(completed_count, len(flac_files), elapsed_seconds)
           next_progress_at = now + _FLAC_PROGRESS_INTERVAL_SECONDS
     except KeyboardInterrupt:
       executor.terminate_workers()
       raise
+  elapsed_seconds = int(time.monotonic() - started_at)
+  _print_flac_progress(completed_count, len(flac_files), elapsed_seconds)
 
 
 def _run_command_line() -> None:
