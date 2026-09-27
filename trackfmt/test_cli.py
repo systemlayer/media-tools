@@ -133,7 +133,18 @@ class FlacTests(unittest.TestCase):
       authentic_future = MagicMock()
       authentic_future.result.return_value = {"verdict": "AUTHENTIC", "score": 0}
       suspicious_future = MagicMock()
-      suspicious_future.result.return_value = {"verdict": "SUSPICIOUS", "score": 75}
+      suspicious_future.result.return_value = {
+          "verdict": "SUSPICIOUS",
+          "score": 75,
+          "confidence": "Anomalies detected may be legitimate",
+          "reason": "Constant MP3 bitrate detected",
+          "score_breakdown": {
+              "rule_1": 50,
+              "rule_2": 0,
+              "rule_3": -5,
+          },
+          "verbose_detail": "must not be rendered",
+      }
       executor = mock_executor.return_value.__enter__.return_value
       executor.submit.side_effect = [authentic_future, suspicious_future]
       output = StringIO()
@@ -154,9 +165,21 @@ class FlacTests(unittest.TestCase):
     rendered = output.getvalue()
     self.assertNotIn(str(authentic), rendered)
     self.assertNotIn(str(ignored), rendered)
-    self.assertIn(
-        f"{suspicious}\n{{'verdict': 'SUSPICIOUS',\n 'score': 75}}\n\n",
+    self.assertEqual(
         rendered,
+        f"Scanning directory: {directory}\n"
+        f"{suspicious}\n"
+        "Anomalies detected may be legitimate\n"
+        "Reason: Constant MP3 bitrate detected\n"
+        "Score=75 Verdict=SUSPICIOUS\n"
+        "Score breakdown: rule_1=50, rule_3=-5\n\n",
+    )
+
+  def test_flac_score_breakdown_formats_missing_or_zero_rules(self) -> None:
+    self.assertEqual(cli._format_score_breakdown({}), "(none)")
+    self.assertEqual(
+        cli._format_score_breakdown({"score_breakdown": {"rule_1": 0}}),
+        "(none)",
     )
 
   @patch("cli.as_completed", side_effect=KeyboardInterrupt)

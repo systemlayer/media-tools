@@ -6,7 +6,6 @@ import subprocess
 import sys
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path, PosixPath
-from pprint import pformat
 from media import read_flac_tags, read_mp3_grouping
 
 
@@ -232,6 +231,18 @@ def _analyze_flac(file_path: Path, sample_duration: float | None) -> dict[str, o
   return analyzer.analyze_file(file_path)
 
 
+def _format_score_breakdown(result: dict[str, object]) -> str:
+  """Format the non-zero score contributions from an analysis result."""
+  breakdown = result.get("score_breakdown")
+  if not isinstance(breakdown, dict):
+    return "(none)"
+  entries = []
+  for rule, value in breakdown.items():
+    if value != 0:
+      entries.append(f"{rule}={value}")
+  return ", ".join(entries) or "(none)"
+
+
 def handle_flac(args: argparse.Namespace) -> None:
   print(f"Scanning directory: {args.directory}")
   flac_files = sorted(
@@ -251,7 +262,10 @@ def handle_flac(args: argparse.Namespace) -> None:
         if result.get("verdict") == "AUTHENTIC":
           continue
         print(file_path)
-        print(pformat(result, sort_dicts=False, width=1))
+        print(result["confidence"])
+        print(f"Reason: {result['reason']}")
+        print(f"Score={result['score']} Verdict={result['verdict']}")
+        print(f"Score breakdown: {_format_score_breakdown(result)}")
         print()
     except KeyboardInterrupt:
       executor.terminate_workers()
