@@ -283,12 +283,14 @@ def handle_flac(args: argparse.Namespace) -> None:
           print(f"Score={result['score']} Verdict={result['verdict']}")
           print(f"Score breakdown: {_format_score_breakdown(result)}")
           print(f"Reason: {result['reason']}")
-          print()
         # Report progress at most once per interval while work remains.
         now = time.monotonic()
         if pending and now >= next_progress_at:
           elapsed_seconds = int(now - started_at)
-          print(f"File {completed_count}/{len(flac_files)}. Elapsed time {elapsed_seconds}s")
+          print(
+              f"File {completed_count}/{len(flac_files)}. Elapsed time {elapsed_seconds}s",
+              file=sys.stderr,
+          )
           next_progress_at = now + _FLAC_PROGRESS_INTERVAL_SECONDS
     except KeyboardInterrupt:
       executor.terminate_workers()

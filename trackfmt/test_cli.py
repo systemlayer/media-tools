@@ -172,8 +172,7 @@ class FlacTests(unittest.TestCase):
         "Anomalies detected may be legitimate\n"
         "Score=75 Verdict=SUSPICIOUS\n"
         "Score breakdown: rule_1=50, rule_3=-5\n"
-        "Reason: Constant MP3 bitrate detected\n"
-        "\n",
+        "Reason: Constant MP3 bitrate detected\n",
     )
 
   @patch("cli.time.monotonic", side_effect=[0.0, 0.0, 20.0, 20.0, 20.0])
@@ -202,7 +201,8 @@ class FlacTests(unittest.TestCase):
           ({second_future}, set()),
       ]
       output = StringIO()
-      with redirect_stdout(output):
+      errors = StringIO()
+      with redirect_stdout(output), redirect_stderr(errors):
         cli.handle_flac(Namespace(
             directory=directory,
             jobs=2,
@@ -210,7 +210,10 @@ class FlacTests(unittest.TestCase):
         ))
     self.assertEqual(
         output.getvalue(),
-        f"Scanning directory: {directory}\n"
+        f"Scanning directory: {directory}\n",
+    )
+    self.assertEqual(
+        errors.getvalue(),
         "File 1/2. Elapsed time 20s\n",
     )
 
