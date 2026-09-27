@@ -115,12 +115,12 @@ class FlacTests(unittest.TestCase):
     cli._analyze_flac(Path("track.flac"), 20.0)
     mock_analyzer.assert_called_once_with(sample_duration=20.0)
 
-  @patch("cli.as_completed", side_effect=lambda futures: futures)
+  @patch("cli.wait", side_effect=lambda futures, **_kwargs: (set(futures), set()))
   @patch("cli.ProcessPoolExecutor")
   def test_flac_prints_only_non_authentic_results(
       self,
       mock_executor: MagicMock,
-      _mock_as_completed: MagicMock,
+      _mock_wait: MagicMock,
   ) -> None:
     with TemporaryDirectory() as temp_dir:
       directory = Path(temp_dir)
@@ -176,6 +176,44 @@ class FlacTests(unittest.TestCase):
         "\n",
     )
 
+  @patch("cli.time.monotonic", side_effect=[0.0, 0.0, 20.0, 20.0, 20.0])
+  @patch("cli.wait")
+  @patch("cli.ProcessPoolExecutor")
+  def test_flac_prints_progress_every_twenty_seconds(
+      self,
+      mock_executor: MagicMock,
+      mock_wait: MagicMock,
+      _mock_monotonic: MagicMock,
+  ) -> None:
+    with TemporaryDirectory() as temp_dir:
+      directory = Path(temp_dir)
+      first = directory / "first.flac"
+      second = directory / "second.flac"
+      first.touch()
+      second.touch()
+      first_future = MagicMock()
+      second_future = MagicMock()
+      first_future.result.return_value = {"verdict": "AUTHENTIC"}
+      second_future.result.return_value = {"verdict": "AUTHENTIC"}
+      executor = mock_executor.return_value.__enter__.return_value
+      executor.submit.side_effect = [first_future, second_future]
+      mock_wait.side_effect = [
+          ({first_future}, {second_future}),
+          ({second_future}, set()),
+      ]
+      output = StringIO()
+      with redirect_stdout(output):
+        cli.handle_flac(Namespace(
+            directory=directory,
+            jobs=2,
+            sample_duration=None,
+        ))
+    self.assertEqual(
+        output.getvalue(),
+        f"Scanning directory: {directory}\n"
+        "File 1/2. Elapsed time 20s\n",
+    )
+
   def test_flac_score_breakdown_formats_missing_or_zero_rules(self) -> None:
     self.assertEqual(cli._format_score_breakdown({}), "(none)")
     self.assertEqual(
@@ -183,12 +221,12 @@ class FlacTests(unittest.TestCase):
         "(none)",
     )
 
-  @patch("cli.as_completed", side_effect=KeyboardInterrupt)
+  @patch("cli.wait", side_effect=KeyboardInterrupt)
   @patch("cli.ProcessPoolExecutor")
   def test_flac_terminates_workers_when_interrupted(
       self,
       mock_executor: MagicMock,
-      _mock_as_completed: MagicMock,
+      _mock_wait: MagicMock,
   ) -> None:
     with TemporaryDirectory() as temp_dir:
       directory = Path(temp_dir)

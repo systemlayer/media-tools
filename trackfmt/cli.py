@@ -4,9 +4,13 @@ import argparse
 import os
 import subprocess
 import sys
-from concurrent.futures import ProcessPoolExecutor, as_completed
+import time
+from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, wait
 from pathlib import Path, PosixPath
 from media import read_flac_tags, read_mp3_grouping
+
+# Seconds between FLAC analysis progress updates.
+_FLAC_PROGRESS_INTERVAL_SECONDS: int = 20
 
 
 def existing_dir(path_str: str) -> Path:
@@ -244,29 +248,48 @@ def _format_score_breakdown(result: dict[str, object]) -> str:
 
 
 def handle_flac(args: argparse.Namespace) -> None:
+  # Discover the complete workload before analysis so progress has a stable total.
   print(f"Scanning directory: {args.directory}")
   flac_files = sorted(
       file_path
       for file_path in args.directory.rglob("*")
       if file_path.is_file() and file_path.suffix.lower() == ".flac"
   )
+  # Use a monotonic clock so system clock changes do not affect progress timing.
+  started_at = time.monotonic()
+  next_progress_at = started_at + _FLAC_PROGRESS_INTERVAL_SECONDS
+  completed_count = 0
   with ProcessPoolExecutor(max_workers=args.jobs) as executor:
     try:
+      # Submit every file once and retain its path for rendering suspicious results.
       futures = {
           executor.submit(_analyze_flac, file_path, args.sample_duration): file_path
           for file_path in flac_files
       }
-      for future in as_completed(futures):
-        file_path = futures[future]
-        result = future.result()
-        if result.get("verdict") == "AUTHENTIC":
-          continue
-        print(file_path)
-        print(result["confidence"])
-        print(f"Score={result['score']} Verdict={result['verdict']}")
-        print(f"Score breakdown: {_format_score_breakdown(result)}")
-        print(f"Reason: {result['reason']}")
-        print()
+      pending = set(futures)
+      while pending:
+        # Wake for either the next completed analysis or the next progress update.
+        timeout = max(0.0, next_progress_at - time.monotonic())
+        done, pending = wait(pending, timeout=timeout, return_when=FIRST_COMPLETED)
+        # Count all completed analyses, but print details only for suspicious files.
+        for future in done:
+          file_path = futures[future]
+          result = future.result()
+          completed_count += 1
+          if result.get("verdict") == "AUTHENTIC":
+            continue
+          print(file_path)
+          print(result["confidence"])
+          print(f"Score={result['score']} Verdict={result['verdict']}")
+          print(f"Score breakdown: {_format_score_breakdown(result)}")
+          print(f"Reason: {result['reason']}")
+          print()
+        # Report progress at most once per interval while work remains.
+        now = time.monotonic()
+        if pending and now >= next_progress_at:
+          elapsed_seconds = int(now - started_at)
+          print(f"File {completed_count}/{len(flac_files)}. Elapsed time {elapsed_seconds}s")
+          next_progress_at = now + _FLAC_PROGRESS_INTERVAL_SECONDS
     except KeyboardInterrupt:
       executor.terminate_workers()
       raise
