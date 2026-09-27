@@ -19,12 +19,10 @@ The tools needed for the commands you use must be available on `PATH`:
 All required tools except `audiomatch` can be installed through the `apt` or
 `apk` package manager, depending on your Linux distribution.
 
-Install the Python dependencies with `pip`. Version 0.1.8 of `audiomatch` is the
-latest release as of July 2026:
+Install the Python dependencies with `pip`.
 
 ```sh
-python3 -m pip install -r requirements.txt
-python3 -m pip install --only-binary=:all: audiomatch==0.1.8
+python3 -m pip install --only-binary=:all: audiomatch==0.1.8 flac-detective==1.18.0
 ```
 
 Run all automatic tests from the repository root:
