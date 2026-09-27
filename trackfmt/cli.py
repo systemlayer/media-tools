@@ -240,21 +240,25 @@ def handle_flac(args: argparse.Namespace) -> None:
       if file_path.is_file() and file_path.suffix.lower() == ".flac"
   )
   with ProcessPoolExecutor(max_workers=args.jobs) as executor:
-    futures = {
-        executor.submit(_analyze_flac, file_path, args.sample_duration): file_path
-        for file_path in flac_files
-    }
-    for future in as_completed(futures):
-      file_path = futures[future]
-      result = future.result()
-      if result.get("verdict") == "AUTHENTIC":
-        continue
-      print(file_path)
-      print(pformat(result, sort_dicts=False, width=1))
-      print()
+    try:
+      futures = {
+          executor.submit(_analyze_flac, file_path, args.sample_duration): file_path
+          for file_path in flac_files
+      }
+      for future in as_completed(futures):
+        file_path = futures[future]
+        result = future.result()
+        if result.get("verdict") == "AUTHENTIC":
+          continue
+        print(file_path)
+        print(pformat(result, sort_dicts=False, width=1))
+        print()
+    except KeyboardInterrupt:
+      executor.terminate_workers()
+      raise
 
 
-def main() -> None:
+def _run_command_line() -> None:
   parser = build_parser()
   args = parser.parse_args()
   args.directory = resolve_directory(parser, args)
@@ -269,9 +273,13 @@ def main() -> None:
   handlers[args.command](args)
 
 
-if __name__ == "__main__":
+def main() -> None:
   try:
-    main()
+    _run_command_line()
   except KeyboardInterrupt:
     print("\nInterrupted.", file=sys.stderr)
     raise SystemExit(130)
+
+
+if __name__ == "__main__":
+  main()

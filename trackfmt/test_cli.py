@@ -2,12 +2,25 @@ import subprocess
 import sys
 import unittest
 from argparse import Namespace
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
 from io import StringIO
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import MagicMock, call, patch
 import cli
+
+
+class MainTests(unittest.TestCase):
+  @patch("cli._run_command_line", side_effect=KeyboardInterrupt)
+  def test_keyboard_interrupt_exits_with_status_130(
+      self,
+      _mock_run_command_line: MagicMock,
+  ) -> None:
+    error = StringIO()
+    with self.assertRaises(SystemExit) as raised, redirect_stderr(error):
+      cli.main()
+    self.assertEqual(raised.exception.code, 130)
+    self.assertEqual(error.getvalue(), "\nInterrupted.\n")
 
 
 class GainTests(unittest.TestCase):
@@ -145,6 +158,25 @@ class FlacTests(unittest.TestCase):
         f"{suspicious}\n{{'verdict': 'SUSPICIOUS',\n 'score': 75}}\n\n",
         rendered,
     )
+
+  @patch("cli.as_completed", side_effect=KeyboardInterrupt)
+  @patch("cli.ProcessPoolExecutor")
+  def test_flac_terminates_workers_when_interrupted(
+      self,
+      mock_executor: MagicMock,
+      _mock_as_completed: MagicMock,
+  ) -> None:
+    with TemporaryDirectory() as temp_dir:
+      directory = Path(temp_dir)
+      (directory / "track.flac").touch()
+      executor = mock_executor.return_value.__enter__.return_value
+      with self.assertRaises(KeyboardInterrupt), redirect_stdout(StringIO()):
+        cli.handle_flac(Namespace(
+            directory=directory,
+            jobs=1,
+            sample_duration=None,
+        ))
+    executor.terminate_workers.assert_called_once_with()
 
 
 if __name__ == "__main__":
