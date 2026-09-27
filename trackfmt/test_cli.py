@@ -174,10 +174,10 @@ class FlacTests(unittest.TestCase):
         "Reason: Constant MP3 bitrate detected\n",
     )
 
-  @patch("cli.time.monotonic", side_effect=[0.0, 0.0, 20.0, 20.0, 20.0])
+  @patch("cli.time.monotonic", side_effect=[0.0, 0.0, 30.0, 30.0, 30.0])
   @patch("cli.wait")
   @patch("cli.ProcessPoolExecutor")
-  def test_flac_prints_progress_every_twenty_seconds(
+  def test_flac_prints_progress_every_thirty_seconds(
       self,
       mock_executor: MagicMock,
       mock_wait: MagicMock,
@@ -213,7 +213,7 @@ class FlacTests(unittest.TestCase):
     )
     self.assertEqual(
         errors.getvalue(),
-        "File 1/2. Elapsed time 20s\n",
+        "File 1/2. Elapsed time 30s\n",
     )
 
   def test_flac_score_breakdown_formats_missing_or_zero_rules(self) -> None:
@@ -241,7 +241,7 @@ class FlacTests(unittest.TestCase):
     )
 
   @patch("cli.colored", side_effect=lambda text, _color: text)
-  @patch("cli.time.monotonic", side_effect=[0.0, 0.0, 20.0, 20.0, 20.0])
+  @patch("cli.time.monotonic", side_effect=[0.0, 0.0, 30.0, 30.0, 30.0])
   @patch("cli.wait")
   @patch("cli.ProcessPoolExecutor")
   def test_flac_progress_uses_dark_grey(
@@ -274,7 +274,7 @@ class FlacTests(unittest.TestCase):
             sample_duration=None,
         ))
     mock_colored.assert_called_once_with(
-        "File 1/2. Elapsed time 20s",
+        "File 1/2. Elapsed time 30s",
         "dark_grey",
     )
 

@@ -21,7 +21,7 @@ class FlacVerdict(StrEnum):
 
 
 # Seconds between FLAC analysis progress updates.
-_FLAC_PROGRESS_INTERVAL_SECONDS: int = 20
+_FLAC_PROGRESS_INTERVAL_SECONDS: int = 30
 
 # Colors used for FLAC analysis verdict headings.
 _FLAC_VERDICT_COLORS: dict[str, str] = {
