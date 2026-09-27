@@ -263,9 +263,9 @@ def handle_flac(args: argparse.Namespace) -> None:
           continue
         print(file_path)
         print(result["confidence"])
-        print(f"Reason: {result['reason']}")
         print(f"Score={result['score']} Verdict={result['verdict']}")
         print(f"Score breakdown: {_format_score_breakdown(result)}")
+        print(f"Reason: {result['reason']}")
         print()
     except KeyboardInterrupt:
       executor.terminate_workers()

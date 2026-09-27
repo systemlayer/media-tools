@@ -170,9 +170,10 @@ class FlacTests(unittest.TestCase):
         f"Scanning directory: {directory}\n"
         f"{suspicious}\n"
         "Anomalies detected may be legitimate\n"
-        "Reason: Constant MP3 bitrate detected\n"
         "Score=75 Verdict=SUSPICIOUS\n"
-        "Score breakdown: rule_1=50, rule_3=-5\n\n",
+        "Score breakdown: rule_1=50, rule_3=-5\n"
+        "Reason: Constant MP3 bitrate detected\n"
+        "\n",
     )
 
   def test_flac_score_breakdown_formats_missing_or_zero_rules(self) -> None:
