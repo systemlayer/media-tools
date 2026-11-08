@@ -1,7 +1,7 @@
 #!/bin/env python
 
 from __future__ import annotations
-from typing import TYPE_CHECKING, Union
+from typing import TYPE_CHECKING
 from dataclasses import dataclass
 import sys
 from pathlib import Path
@@ -10,7 +10,11 @@ import argparse
 if TYPE_CHECKING:
   import torch
   from spandrel import ImageModelDescriptor  # type: ignore
-  from PIL import Image, ImageFile
+  from PIL import Image
+
+
+# Look for bundled models in this directory beside the script.
+MODELS_DIR = Path(__file__).resolve().parent / "models"
 
 
 # Keep a loaded model together with its source and repetition count.
@@ -42,7 +46,7 @@ def run_model(model: ImageModelDescriptor, image: torch.Tensor) -> torch.Tensor:
 
 # Apply loaded models on the GPU, converting between PIL and tensors only at the boundaries.
 def apply_models(
-    image: Union[Image.Image, ImageFile.ImageFile],
+    image: Image.Image,
     stages: list[ModelStage]
 ) -> Image.Image:
   from PIL import Image
@@ -69,9 +73,9 @@ def apply_models(
   image_tensor = image_tensor.squeeze(0).cpu()
   # Denormalize the image if necessary (reverses "transforms.Normalize").
   # image_tensor = image_tensor * 0.5 + 0.5
-  upscaled_image = transforms.ToPILImage()(image_tensor)  # type: ignore
-  assert isinstance(upscaled_image, Image.Image)
-  return upscaled_image
+  processed_image = transforms.ToPILImage()(image_tensor)  # type: ignore
+  assert isinstance(processed_image, Image.Image)
+  return processed_image
 
 
 # Process an image, optionally forcing RGB for models that require three channels, and save it.
@@ -104,7 +108,7 @@ class ListModelsAction(argparse.Action):
       self, parser: argparse.ArgumentParser, namespace: argparse.Namespace,
       values: object, option_string: str | None = None
   ) -> None:
-    list_models(Path(__file__).resolve().parent / MODELS_DIR)
+    list_models(MODELS_DIR)
     parser.exit()
 
 
@@ -132,10 +136,6 @@ def parse_args() -> argparse.Namespace:
       parser.error(f"{specification!r}: {error}")
   args.models = stages
   return args
-
-
-# Look for bundled models in this directory beside the script.
-MODELS_DIR = Path("models")
 
 
 # Read the models directory and print sorted .pth filenames to standard output.
@@ -168,8 +168,7 @@ def parse_model_spec(specification: str) -> tuple[Path, int]:
 def resolve_model_path(model_path: Path) -> Path:
   if model_path.is_file():
     return model_path.resolve()
-  script_dir = Path(__file__).resolve().parent
-  bundled_path = script_dir / MODELS_DIR / model_path
+  bundled_path = MODELS_DIR / model_path
   if bundled_path.is_file():
     return bundled_path.resolve()
   raise argparse.ArgumentTypeError(f"model file does not exist: {model_path}")
