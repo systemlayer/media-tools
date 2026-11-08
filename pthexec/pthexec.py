@@ -2,18 +2,27 @@
 
 from __future__ import annotations
 from typing import TYPE_CHECKING, Union
+from dataclasses import dataclass
 import sys
 from pathlib import Path
 import argparse
 
 if TYPE_CHECKING:
   import torch
-  from spandrel import ModelDescriptor  # type: ignore
+  from spandrel import ImageModelDescriptor  # type: ignore
   from PIL import Image, ImageFile
 
 
+# Keep a loaded model together with its source and repetition count.
+@dataclass(frozen=True)
+class ModelStage:
+  path: Path
+  model: ImageModelDescriptor
+  passes: int
+
+
 # Load an image model and prepare it for GPU inference.
-def initialize_model(model_file: Path) -> ModelDescriptor:
+def initialize_model(model_file: Path) -> ImageModelDescriptor:
   from spandrel import ImageModelDescriptor, ModelLoader  # type: ignore
   model = ModelLoader().load_from_file(str(model_file))
   assert isinstance(model, ImageModelDescriptor)
@@ -23,7 +32,7 @@ def initialize_model(model_file: Path) -> ModelDescriptor:
 
 
 # Run the GPU model with PyTorch gradient tracking disabled.
-def run_model(model: ModelDescriptor, image: torch.Tensor) -> torch.Tensor:
+def run_model(model: ImageModelDescriptor, image: torch.Tensor) -> torch.Tensor:
   import torch
   with torch.no_grad():
     tensor = model(image)  # type: ignore
@@ -31,12 +40,10 @@ def run_model(model: ModelDescriptor, image: torch.Tensor) -> torch.Tensor:
     return tensor
 
 
-# Receives a PIL image, runs the model against it, and converts the result back to a PIL image.
-# The "upscale" name in the function is by convention only, the image processing is defined by the
-# model i.e., it could change colors or fix artifacts and preserve the image size.
-def upscale_image(
+# Apply loaded models on the GPU, converting between PIL and tensors only at the boundaries.
+def apply_models(
     image: Union[Image.Image, ImageFile.ImageFile],
-    model: ModelDescriptor, passes: int
+    stages: list[ModelStage]
 ) -> Image.Image:
   from PIL import Image
   from torchvision import transforms  # type: ignore
@@ -48,8 +55,15 @@ def upscale_image(
   transform_tensor: torch.Tensor = transform(image)  # type: ignore
   # Move to GPU (with ".cuda()").
   image_tensor = transform_tensor.unsqueeze(0).cuda()
-  for _ in range(passes):
-    image_tensor = run_model(model, image_tensor)
+  for stage_number, stage in enumerate(stages, start=1):
+    for pass_number in range(1, stage.passes + 1):
+      try:
+        image_tensor = run_model(stage.model, image_tensor)
+      except Exception as error:
+        raise RuntimeError(
+            f"model stage {stage_number}/{len(stages)} ({stage.path}), "
+            f"pass {pass_number}/{stage.passes} failed"
+        ) from error
   # Convert the processed tensor back to a PIL image, "squeeze(0)" will remove
   # the batch dimension (i.e., undo the previous "unsqueeze(0)").
   image_tensor = image_tensor.squeeze(0).cpu()
@@ -64,8 +78,7 @@ def upscale_image(
 def process_image(
     input_file: Path,
     output_dir: Path,
-    model: ModelDescriptor,
-    passes: int,
+    stages: list[ModelStage],
     force_rgb: bool,
     compression: int
 ) -> None:
@@ -77,11 +90,11 @@ def process_image(
   with Image.open(input_file) as image:
     if force_rgb:
       image = image.convert("RGB")
-    upscaled_image = upscale_image(image, model, passes)
+    processed_image = apply_models(image, stages)
   output_file = output_dir / input_file.name
   # Keeping the input filename lets Pillow pick the output format from its extension.
   # compress_level only applies to PNGs; it's fine for other formats to ignore it.
-  upscaled_image.save(output_file, compress_level=compression)
+  processed_image.save(output_file, compress_level=compression)
 
 
 # Read bundled model filenames, print them, and exit through argparse.
@@ -95,20 +108,30 @@ class ListModelsAction(argparse.Action):
     parser.exit()
 
 
-# Parse CLI options, letting listing exit before required arguments are checked.
+# Parse CLI options and validate model files on disk; listing exits before validation.
 def parse_args() -> argparse.Namespace:
-  parser = argparse.ArgumentParser()
+  parser = argparse.ArgumentParser(allow_abbrev=False)
   parser.add_argument("-l", "--list", action=ListModelsAction, nargs=0,
                       help="List available .pth models")
   parser.add_argument("-i", "--input", type=Path, required=True,
                       help="Path for the input directory")
   parser.add_argument("-o", "--output", type=Path, required=True,
                       help="Path for the output directory")
-  parser.add_argument("-m", "--model", type=str, required=True, help="Path for the .pth model file")
+  parser.add_argument("-m", "--models", nargs="+", required=True, metavar="MODEL",
+                      help="Ordered .pth model paths, each optionally followed by :N passes")
   parser.add_argument("--rgb", action="store_true", default=False, help="Force convert to RGB")
   parser.add_argument("-c", "--compression", type=int, choices=range(10), default=1,
                       help="PNG compression level from 0 to 9 (default: 1)")
-  return parser.parse_args()
+  args = parser.parse_args()
+  stages: list[tuple[Path, int]] = []
+  for specification in args.models:
+    try:
+      model_path, passes = parse_model_spec(specification)
+      stages.append((resolve_model_path(model_path), passes))
+    except argparse.ArgumentTypeError as error:
+      parser.error(f"{specification!r}: {error}")
+  args.models = stages
+  return args
 
 
 # Look for bundled models in this directory beside the script.
@@ -126,24 +149,33 @@ def list_models(models_dir: Path) -> None:
       print(entry.name)
 
 
-# Resolve a model path and its optional colon-separated pass count.
-def locate_model(model_file_with_passes: str) -> tuple[Path, int]:
-  parts = model_file_with_passes.rsplit(":", 1)
-  model_path = Path(parts[0])
-  pass_count = "1" if len(parts) == 1 else (parts[1] or "1")
+# Parse a model path and its optional positive pass count without accessing disk.
+def parse_model_spec(specification: str) -> tuple[Path, int]:
+  parts = specification.rsplit(":", 1)
+  if not parts[0]:
+    raise argparse.ArgumentTypeError("model path must not be empty")
+  pass_count = "1" if len(parts) == 1 else parts[1]
   try:
     passes = int(pass_count)
   except ValueError as error:
-    raise argparse.ArgumentTypeError("Pass count must be a positive integer") from error
+    raise argparse.ArgumentTypeError("pass count must be a positive integer") from error
   if passes < 1:
-    raise argparse.ArgumentTypeError("Pass count must be a positive integer")
+    raise argparse.ArgumentTypeError("pass count must be a positive integer")
+  return Path(parts[0]), passes
+
+
+# Find an existing model file on disk, preferring the supplied path to bundled models.
+def resolve_model_path(model_path: Path) -> Path:
   if model_path.is_file():
-    return model_path, passes
+    return model_path.resolve()
   script_dir = Path(__file__).resolve().parent
-  return script_dir / MODELS_DIR / model_path, passes
+  bundled_path = script_dir / MODELS_DIR / model_path
+  if bundled_path.is_file():
+    return bundled_path.resolve()
+  raise argparse.ArgumentTypeError(f"model file does not exist: {model_path}")
 
 
-# Validate paths and process input files sequentially with one loaded model.
+# Validate directories, load models onto the GPU, and read and save images sequentially.
 def main() -> int:
   args = parse_args()
   import torch
@@ -158,14 +190,24 @@ def main() -> int:
   if output_dir_real.exists() and not output_dir_real.is_dir():
     print("ERROR: output must be a directory", file=sys.stderr)
     return 1
-  model_file, passes = locate_model(args.model)
   print(
-      f"Input    : {input_dir_real}\nOutput   : {output_dir_real}\nModel    : {model_file}:{passes}\nForce RGB: {args.rgb}")
+      f"Input    : {input_dir_real}\nOutput   : {output_dir_real}\nForce RGB: {args.rgb}")
+  print("Models:")
+  for stage_number, (model_file, passes) in enumerate(args.models, start=1):
+    print(f"  {stage_number}. {model_file} (passes: {passes})")
   if input_dir_real == output_dir_real:
     print("ERROR: input directory must not be the same as the output directory")
     return 1
+  stages: list[ModelStage] = []
+  for stage_number, (model_file, passes) in enumerate(args.models, start=1):
+    try:
+      model = initialize_model(model_file)
+    except Exception as error:
+      raise RuntimeError(
+          f"loading model stage {stage_number}/{len(args.models)} ({model_file}) failed"
+      ) from error
+    stages.append(ModelStage(path=model_file, model=model, passes=passes))
   output_dir_real.mkdir(parents=True, exist_ok=True)
-  model = initialize_model(model_file)
   files: list[Path] = []
   for entry in input_dir_real.iterdir():
     if entry.is_file():
@@ -174,7 +216,7 @@ def main() -> int:
   # shared, it's especially annoying because of the PyTorch stuff, so just do
   # it sequentially. Use an external program to distribute the tasks if needed.
   for image_file in files:
-    process_image(image_file, output_dir_real, model, passes, args.rgb, args.compression)
+    process_image(image_file, output_dir_real, stages, args.rgb, args.compression)
   return 0
 
 
