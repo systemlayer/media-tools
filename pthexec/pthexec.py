@@ -1,17 +1,20 @@
 #!/bin/env python
 
-import torch
-from spandrel import ImageModelDescriptor, ModelLoader, ModelDescriptor  # type: ignore
-from PIL import Image, ImageFile
-from torchvision import transforms  # type: ignore
-from typing import Union
+from __future__ import annotations
+from typing import TYPE_CHECKING, Union
 import sys
 from pathlib import Path
 import argparse
 
+if TYPE_CHECKING:
+  import torch
+  from spandrel import ModelDescriptor  # type: ignore
+  from PIL import Image, ImageFile
+
 
 # Load an image model and prepare it for GPU inference.
 def initialize_model(model_file: Path) -> ModelDescriptor:
+  from spandrel import ImageModelDescriptor, ModelLoader  # type: ignore
   model = ModelLoader().load_from_file(str(model_file))
   assert isinstance(model, ImageModelDescriptor)
   # Send it to the GPU and put it in inference mode.
@@ -19,7 +22,9 @@ def initialize_model(model_file: Path) -> ModelDescriptor:
   return model
 
 
+# Run the GPU model with PyTorch gradient tracking disabled.
 def run_model(model: ModelDescriptor, image: torch.Tensor) -> torch.Tensor:
+  import torch
   with torch.no_grad():
     tensor = model(image)  # type: ignore
     assert isinstance(tensor, torch.Tensor)
@@ -33,6 +38,8 @@ def upscale_image(
     image: Union[Image.Image, ImageFile.ImageFile],
     model: ModelDescriptor, passes: int
 ) -> Image.Image:
+  from PIL import Image
+  from torchvision import transforms  # type: ignore
   # Define transformation pipeline to convert the PIL image to a torch.Tensor.
   transform = transforms.Compose([
       transforms.ToTensor(),  # Converts the image to a torch.Tensor
@@ -62,6 +69,7 @@ def process_image(
     force_rgb: bool,
     compression: int
 ) -> None:
+  from PIL import Image
   # Sometimes images can contain alpha channels (RGBA) but some models only work with RGB, thus an
   # error like "Given groups=1, weight of size [...], expected input[...] to have 3 channels, but
   # got 4 channels instead". Use the force_rgb argument to avoid these errors.
@@ -76,9 +84,22 @@ def process_image(
   upscaled_image.save(output_file, compress_level=compression)
 
 
-# Parse the input, output, model, RGB, and PNG compression options.
+# Read bundled model filenames, print them, and exit through argparse.
+class ListModelsAction(argparse.Action):
+  # List models from disk on standard output and exit before processing images.
+  def __call__(
+      self, parser: argparse.ArgumentParser, namespace: argparse.Namespace,
+      values: object, option_string: str | None = None
+  ) -> None:
+    list_models(Path(__file__).resolve().parent / MODELS_DIR)
+    parser.exit()
+
+
+# Parse CLI options, letting listing exit before required arguments are checked.
 def parse_args() -> argparse.Namespace:
   parser = argparse.ArgumentParser()
+  parser.add_argument("-l", "--list", action=ListModelsAction, nargs=0,
+                      help="List available .pth models")
   parser.add_argument("-i", "--input", type=Path, required=True,
                       help="Path for the input directory")
   parser.add_argument("-o", "--output", type=Path, required=True,
@@ -92,6 +113,17 @@ def parse_args() -> argparse.Namespace:
 
 # Look for bundled models in this directory beside the script.
 MODELS_DIR = Path("models")
+
+
+# Read the models directory and print sorted .pth filenames to standard output.
+def list_models(models_dir: Path) -> None:
+  try:
+    entries = sorted(models_dir.iterdir())
+  except FileNotFoundError:
+    return
+  for entry in entries:
+    if entry.suffix == ".pth" and entry.is_file():
+      print(entry.name)
 
 
 # Resolve a model path and its optional colon-separated pass count.
@@ -114,6 +146,7 @@ def locate_model(model_file_with_passes: str) -> tuple[Path, int]:
 # Validate paths and process input files sequentially with one loaded model.
 def main() -> int:
   args = parse_args()
+  import torch
   if not torch.cuda.is_available():
     print("CUDA is not available", file=sys.stderr)
     return 1

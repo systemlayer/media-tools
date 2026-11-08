@@ -6,10 +6,12 @@ Install dependencies and run from this directory:
 
 ```sh
 python3 -m pip install -r requirements.txt
+python3 pthexec.py --list
 python3 pthexec.py -i ./input -o ./output -m ./models/model.pth
 python3 pthexec.py -i ./input -o ./output -m model.pth:2 --rgb -c 6
 ```
 
+- `-l, --list`: list sorted `.pth` filenames directly inside `models/` beside the script and exit.
 - `-i, --input`: existing directory containing images.
 - `-o, --output`: output directory, created if needed; must differ from the input directory.
 - `-m, --model`: model path, optionally followed by `:N` to apply it `N` times (default: `1`). If the path is not an existing file, it is resolved under `models/` beside the script.
